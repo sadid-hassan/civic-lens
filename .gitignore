@@ -1,14 +1,42 @@
-# Python
+# --- Python ---
 __pycache__/
-*.pyc
-.venv/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg
+*.egg-info/
+dist/
+build/
 
-# Node.js
+# --- Node.js ---
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Environment
+# --- Environment ---
 .venv/
 .env
+.env.*
+*.local
 
-# VSCode
+# --- Frontend build output ---
+dist/
+build/
+
+# --- VSCode ---
 .vscode/
+.history/
+*.code-workspace
+
+# --- OS generated files ---
+.DS_Store
+Thumbs.db
+
+# --- Coverage & testing ---
+.coverage
+coverage/
+*.lcov
+pytest_cache/

@@ -1,55 +1,49 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 
-// Base URL for backend API
-// Uses environment variable VITE_API_URL if available, otherwise defaults to localhost:8000
+// Base URL for backend API (uses VITE_API_URL if set, otherwise localhost:8000)
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-
 // --- Type Definitions ---
-type ApiStatus = "checking" | "up" | "down";       // Possible states of backend connection
-type HealthResponse = { ok: boolean };             // Shape of /health endpoint response
-type SummarizeResponse = { summary: string };      // Shape of /summarize endpoint response
-
-
+type ApiStatus = "checking" | "up" | "down";      // Backend connection states
+type HealthResponse = { ok: boolean };            // Shape of /health response
+type SummarizeResponse = { summary: string };     // Shape of summarization response
 
 /**
- * 
- * @returns Main application component for CivicLens 
- * 
- * Handles: 
- * - Checking backend API health on page load
- * - Accepting user text input
- * - Sending text to backend for summarization
- * - Displaying results and error states
+ * CivicLens App
+ *
+ * Responsibilities:
+ * - Check backend API health on mount
+ * - Allow user to summarize either pasted text or a URL
+ * - Handle loading + error states gracefully
+ * - Display summary results
  */
 export default function App() {
-  // --- Component State ---
-  const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");  // Backend health status
-  const [text, setText] = useState("");                               // Raw user input
-  const [summary, setSummary] = useState("");                         // Summarized text from backend
-  const [loading, setLoading] = useState(false);                      // Loading indicator for requests
-  const [err, setErr] = useState("");                                 // Error message to show user
+  // UI mode: user chooses between text summarization or URL summarization
+  const [mode, setMode] = useState<"text" | "url">("text");
 
-  /**
-   * On first render (component mount):
-   * - Calls /health endpoint to check if backend is reachable
-   * - Updates 'apiStatus' accordingly
-   */
+  // Shared state
+  const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  // Text mode state
+  const [text, setText] = useState("");
+  const [summary, setSummary] = useState("");
+
+  // URL mode state
+  const [url, setUrl] = useState("");
+
+  // --- Effects ---
+  // Runs once on mount to check if backend is reachable
   useEffect(() => {
     fetch(`${API}/health`)
       .then((r) => r.json() as Promise<HealthResponse>)
       .then((d) => setApiStatus(d.ok ? "up" : "down"))
       .catch(() => setApiStatus("down"));
-  }, []); // Empty dependency array ensures this runs only once
+  }, []);
 
-
-
-  /**
-   * @returns Sends the user's text to the backend summarization endpoint
-   * - Shows a loading state while request is in flight
-   * - Handles success (update 'summary') and errors (update 'err')
-   */
-  async function onSummarize() {
+  // --- Actions ---
+  async function onSummarizeText() {
     setLoading(true);
     setErr("");
     setSummary("");
@@ -62,43 +56,104 @@ export default function App() {
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as SummarizeResponse;
       setSummary(data.summary);
-    } catch (error) {
-      console.error(error);
-      setErr("Failed to summarize. Is the backend running on :8000?");
+    } catch (e) {
+      console.error(e);
+      setErr("Failed to summarize text. Is the backend running on :8000?");
     } finally {
       setLoading(false);
     }
   }
 
+  async function onSummarizeUrl() {
+    setLoading(true);
+    setErr("");
+    setSummary("");
+    try {
+      const res = await fetch(`${API}/summarize-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as SummarizeResponse;
+      setSummary(data.summary);
+    } catch (e) {
+      console.error(e);
+      // NOTE: Some URLs may fail if content cannot be extracted (e.g., paywalls)
+      setErr("Failed to summarize URL. Try a different article or check backend logs.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-
-  // --- JSX UI ---
+  // --- UI ---
   return (
     <div style={{ maxWidth: 720, margin: "2rem auto", padding: "1rem" }}>
       <h1>CivicLens — WIP v2</h1>
 
+      {/* API health indicator */}
       {apiStatus === "checking" && <div>⏳ Checking API…</div>}
       {apiStatus === "up" && <div style={{ color: "#22c55e" }}>✅ API healthy</div>}
-      {apiStatus === "down" && (
-        <div style={{ color: "#ef4444" }}>❌ API unreachable</div>
-      )}
+      {apiStatus === "down" && <div style={{ color: "#ef4444" }}>❌ API unreachable</div>}
 
-      <textarea
-        style={{ width: "100%", height: 200 }}
-        placeholder="Paste a couple paragraphs..."
-        value={text}
-        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-          setText(e.target.value)
-        }
-      />
-
-      <div style={{ marginTop: 12 }}>
-        <button onClick={onSummarize} disabled={!text.trim() || loading}>
-          {loading ? "Summarizing..." : "Summarize"}
-        </button>
-        {err && <span style={{ color: "red", marginLeft: 12 }}>{err}</span>}
+      {/* Mode switch */}
+      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+        <label>
+          <input
+            type="radio"
+            name="mode"
+            value="text"
+            checked={mode === "text"}
+            onChange={() => setMode("text")}
+          />{" "}
+          Summarize Text
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="mode"
+            value="url"
+            checked={mode === "url"}
+            onChange={() => setMode("url")}
+          />{" "}
+          Summarize URL
+        </label>
       </div>
 
+      {/* Input field */}
+      <div style={{ marginTop: 12 }}>
+        {mode === "text" ? (
+          <textarea
+            style={{ width: "100%", height: 200 }}
+            placeholder="Paste a couple paragraphs..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        ) : (
+          <input
+            style={{ width: "100%", height: 40, padding: "0 8px" }}
+            placeholder="https://example.com/my-article"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+        )}
+      </div>
+
+      {/* Actions + Errors */}
+      <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 12 }}>
+        {mode === "text" ? (
+          <button onClick={onSummarizeText} disabled={!text.trim() || loading}>
+            {loading ? "Summarizing..." : "Summarize"}
+          </button>
+        ) : (
+          <button onClick={onSummarizeUrl} disabled={!url.trim() || loading}>
+            {loading ? "Summarizing..." : "Summarize URL"}
+          </button>
+        )}
+        {err && <span style={{ color: "salmon" }}>{err}</span>}
+      </div>
+
+      {/* Output */}
       {summary && (
         <div style={{ marginTop: 16, padding: 12, border: "1px solid #ccc" }}>
           <strong>Summary</strong>

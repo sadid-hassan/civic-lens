@@ -1,27 +1,41 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-// Base URL for backend API (uses VITE_API_URL if set, otherwise localhost:8000)
+// Base URL for backend API
+// Uses environment variable VITE_API_URL if available, otherwise defaults to localhost:8000
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // --- Type Definitions ---
-type ApiStatus = "checking" | "up" | "down";      // Backend connection states
-type HealthResponse = { ok: boolean };            // Shape of /health response
-type SummarizeResponse = { summary: string };     // Shape of summarization response
+type ApiStatus = "checking" | "up" | "down";     // Possible states of backend connection
+type HealthResponse = { ok: boolean };           // Shape of /health endpoint response
+type SummarizeResponse = { summary: string };    // Shape of /summarize and /summarize-url responses
 
 /**
- * CivicLens App
- *
- * Responsibilities:
- * - Check backend API health on mount
- * - Allow user to summarize either pasted text or a URL
- * - Handle loading + error states gracefully
- * - Display summary results
+ * Utility: Convert unknown error objects into user-friendly strings
+ */
+function humanizeError(e: unknown): string {
+  if (e instanceof Error) {
+    return e.message;
+  }
+  try {
+    const raw = String((e as { message?: string })?.message ?? e ?? "");
+    if (!raw) return "Something went wrong.";
+    const parsed = JSON.parse(raw) as { detail?: string | { message?: string } };
+    if (typeof parsed.detail === "string") return parsed.detail;
+    if (typeof parsed.detail?.message === "string") return parsed.detail.message;
+    return raw;
+  } catch {
+    return "Something went wrong. Please try again.";
+  }
+}
+
+/**
+ * Main application component for CivicLens
  */
 export default function App() {
-  // UI mode: user chooses between text summarization or URL summarization
+  // UI mode: summarize pasted text OR a URL
   const [mode, setMode] = useState<"text" | "url">("text");
 
-  // Shared state
+  // Common state
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -33,8 +47,7 @@ export default function App() {
   // URL mode state
   const [url, setUrl] = useState("");
 
-  // --- Effects ---
-  // Runs once on mount to check if backend is reachable
+  // Check backend health once on load
   useEffect(() => {
     fetch(`${API}/health`)
       .then((r) => r.json() as Promise<HealthResponse>)
@@ -42,7 +55,8 @@ export default function App() {
       .catch(() => setApiStatus("down"));
   }, []);
 
-  // --- Actions ---
+  // --- API Calls ---
+
   async function onSummarizeText() {
     setLoading(true);
     setErr("");
@@ -57,8 +71,7 @@ export default function App() {
       const data = (await res.json()) as SummarizeResponse;
       setSummary(data.summary);
     } catch (e) {
-      console.error(e);
-      setErr("Failed to summarize text. Is the backend running on :8000?");
+      setErr(humanizeError(e));
     } finally {
       setLoading(false);
     }
@@ -76,22 +89,20 @@ export default function App() {
       });
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as SummarizeResponse;
+      
       setSummary(data.summary);
     } catch (e) {
-      console.error(e);
-      // NOTE: Some URLs may fail if content cannot be extracted (e.g., paywalls)
-      setErr("Failed to summarize URL. Try a different article or check backend logs.");
+      setErr(humanizeError(e));
     } finally {
       setLoading(false);
     }
   }
 
-  // --- UI ---
   return (
     <div style={{ maxWidth: 720, margin: "2rem auto", padding: "1rem" }}>
       <h1>CivicLens — WIP v2</h1>
 
-      {/* API health indicator */}
+      {/* API status */}
       {apiStatus === "checking" && <div>⏳ Checking API…</div>}
       {apiStatus === "up" && <div style={{ color: "#22c55e" }}>✅ API healthy</div>}
       {apiStatus === "down" && <div style={{ color: "#ef4444" }}>❌ API unreachable</div>}
@@ -120,7 +131,7 @@ export default function App() {
         </label>
       </div>
 
-      {/* Input field */}
+      {/* Input */}
       <div style={{ marginTop: 12 }}>
         {mode === "text" ? (
           <textarea

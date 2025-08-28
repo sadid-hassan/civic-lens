@@ -40,3 +40,24 @@
 .read-the-docs {
   color: #888;
 }
+
+/* tiny spinner */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #999;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* error banner */
+.error-banner {
+  background: #3b0d0d;
+  border: 1px solid #ef4444;
+  color: #fecaca;
+  padding: 10px 12px;
+  border-radius: 6px;
+}
